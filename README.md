@@ -46,6 +46,14 @@ This string, in LaTeX, is
 
 ![effect](images/causal_effect.png)
 
+## Testing un-identifiable clause
+```python
+P = ID({'Y_1','Y_2','Y_3'}, {'X'}, G, stop_on_hedge=False)
+P.printLatex()        # '\sum_{w, z}P(w, y_1, y_2, z|do(x))P(y_3|w, x)'
+P.isUnidentifiable()  # True
+P.getHedges()         # [((F vertices, F edges), (F' vertices, F' edges))]
+```
+
 ## Examples
 
 Some examples from the dissertation can be found in this repository:

@@ -7,8 +7,8 @@ class Probability:
     and it becomes a product of probabilities in children. If fraction is set to True, the
     divisor is enabled.'''
 
-    def __init__(self, var=set(), cond=set(), recursive=False, children=set(), sumset=set(), fraction=False,
-                 divisor=None):
+        def __init__(self, var=set(), cond=set(), recursive=False, children=set(), sumset=set(), fraction=False,
+                 divisor=None, do=set(), hedge=None):
         self._var = var
         self._cond = cond
         self._recursive = recursive
@@ -16,6 +16,11 @@ class Probability:
         self._sumset = sumset
         self._fraction = fraction
         self._divisor = divisor
+        # Interventional (unidentifiable) term: P_{do}(var|cond). When _do is not empty
+        # this leaf stands for a causal effect that the ID algorithm could not identify,
+        # and _hedge holds the (C-forest 1, C-forest 2) witness of its unidentifiability.
+        self._do = do
+        self._hedge = hedge
 
     def copy(self):
         return copy.deepcopy(self)
@@ -26,6 +31,8 @@ class Probability:
         out = {}
         out["var"] = self._var
         out["cond"] = self._cond
+        out["do"] = self._do
+        out["hedge"] = self._hedge
         out["recursive"] = self._recursive
         if self._recursive:
             out["children"] = [child.attributes() for child in self._children]
@@ -44,6 +51,7 @@ class Probability:
         free = set()
         if not self._recursive:
             free = free.union(self._var)
+            free = free.union(self._var).union(self._do)    
         else:
             for prob in self._children:
                 free = free.union(prob.getFreeVariables())
@@ -59,6 +67,11 @@ class Probability:
         while (changes):
             changes = False
             if not self._recursive:
+                if len(self._do) != 0:
+                    sum_variables = self._sumset.intersection(self._var).difference(self._do)
+                    self._sumset = self._sumset.difference(sum_variables)
+                    self._var = self._var.difference(sum_variables)
+                    break
                 sum_variables = self._sumset.intersection(self._var)
                 self._sumset = self._sumset.difference(sum_variables)
                 self._var = self._var.difference(sum_variables)
@@ -80,7 +93,8 @@ class Probability:
                 simplified = None
                 for prob1 in self._children:
                     for prob2 in self._children:
-                        if not prob1._recursive and not prob2._recursive and not prob1 == prob2:
+                        if not prob1._recursive and not prob2._recursive and not prob1 == prob2 \
+                                                and len(prob1._do) == 0 and len(prob2._do) == 0:
                             if prob1._cond == prob2._var.union(prob2._cond):
                                 simplified = prob2
                                 if verbose: print("Additional simplification")
@@ -125,10 +139,22 @@ class Probability:
             else:
                 out += '\\left(\sum_{' + ', '.join(sorted(self._sumset)).lower() + '}'
         if not self._recursive:
+            # if len(self._var) != 0:
+            #     out += 'P(' + ', '.join(sorted(self._var)).lower()
+            #     if len(self._cond) != 0:
+            #         out += '|' + ', '.join(sorted(self._cond)).lower()
+            #     out += ')'
+
+            # add "do" printout
             if len(self._var) != 0:
                 out += 'P(' + ', '.join(sorted(self._var)).lower()
+                conditioning = []
+                if len(self._do) != 0:
+                    conditioning.append('do(' + ', '.join(sorted(self._do)).lower() + ')')
                 if len(self._cond) != 0:
-                    out += '|' + ', '.join(sorted(self._cond)).lower()
+                    conditioning.append(', '.join(sorted(self._cond)).lower())
+                if len(conditioning) != 0:
+                    out += '|' + ', '.join(conditioning)
                 out += ')'
             else:
                 out += '1'
@@ -144,6 +170,34 @@ class Probability:
                                             verbose=verbose)
             out += '}'
         return out
+
+
+    # Help functions for unidentifiable terms
+    def isUnidentifiable(self):
+        '''Function that returns True if the expression contains at least one
+        interventional (unidentifiable) term.'''
+        if len(self._do) != 0:
+            return True
+        if self._recursive:
+            for prob in self._children:
+                if prob.isUnidentifiable():
+                    return True
+        if self._fraction and self._divisor is not None:
+            return self._divisor.isUnidentifiable()
+        return False
+
+    def getHedges(self):
+        '''Function that returns the list of hedges witnessing the unidentifiable terms
+        of the expression.'''
+        hedges = []
+        if len(self._do) != 0 and self._hedge is not None:
+            hedges.append(self._hedge)
+        if self._recursive:
+            for prob in self._children:
+                hedges += prob.getHedges()
+        if self._fraction and self._divisor is not None:
+            hedges += self._divisor.getHedges()
+        return hedges
 
     def decouple(self):
         '''Recursive function that decouples products of probabilities when possible to ease simplification.'''

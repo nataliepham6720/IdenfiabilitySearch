@@ -8,8 +8,10 @@ class HedgeFound(Exception):
 
     def __init__(self, g1, g2, message="Causal effect not identifiable. A hedge has been found:"):
         self._message = message
-        v1, e1 = printGraph(g1)
-        v2, e2 = printGraph(g2)
+        self._g1 = g1          
+        self._g2 = g2        
+        v1, e1 = printGraph(self._g1)
+        v2, e2 = printGraph(self._g2)
         super().__init__(self._message + "\n\nC-Forest 1:\nVertices: " + ', '.join(v1) +
                          '\nEdges: ' + ', '.join(e1) + "\n\nC-Forest 2:\nVertices: " +
                          ', '.join(v2) + '\nEdges: ' + ', '.join(e2))
@@ -25,7 +27,13 @@ class NoCaseTriggered(Exception):
 
 
 def ID_rec(Y, X, P, G, ordering, verbose=False, tab=0):
-    '''Recursive non-conditional identification algorithm.'''
+    '''Recursive non-conditional identification algorithm.
+
+    If stop_on_hedge is True (default), a HedgeFound exception is raised as soon as a hedge
+    is found. If it is False, the unidentifiable sub-effect P(y|do(x)) of the current
+    subproblem is returned as an interventional term instead, and the algorithm carries on
+    with the remaining subproblems, so the returned expression is identified everywhere
+    except in the interventional terms it contains.'''
 
     V = set(G.vs["name"])
     G_dir, G_bidir = get_directed_bidirected_graphs(G)
@@ -53,8 +61,10 @@ def ID_rec(Y, X, P, G, ordering, verbose=False, tab=0):
         if verbose: print("Depth:", tab, "Line 2 output: Y:", Y, "new X:", X.intersection(anc), "new V:", anc, "P:",
                           P_out.printLatex())
         if verbose: print("Depth:", tab, "Line 2 graph:", printGraph(G.induced_subgraph(G.vs.select(name_in=anc))))
+        # return ID_rec(Y, X.intersection(anc), P_out, G.induced_subgraph(G.vs.select(name_in=anc)), ordering,
+        #               verbose=verbose, tab=tab + 1)
         return ID_rec(Y, X.intersection(anc), P_out, G.induced_subgraph(G.vs.select(name_in=anc)), ordering,
-                      verbose=verbose, tab=tab + 1)
+                      stop_on_hedge=stop_on_hedge, verbose=verbose, tab=tab + 1)
 
     # line 3
     G_x = G.copy()
@@ -65,7 +75,8 @@ def ID_rec(Y, X, P, G, ordering, verbose=False, tab=0):
     if len(W) != 0:
         if verbose: print("Depth:", tab, "Line 3 before: Y:", Y, "X:", X, "V:", V, "P:", P.printLatex())
         if verbose: print("Depth:", tab, "Line 3 W:", W, "new X:", X.union(W))
-        return ID_rec(Y, X.union(W), P, G, ordering, verbose=verbose, tab=tab + 1)
+        # return ID_rec(Y, X.union(W), P, G, ordering, verbose=verbose, tab=tab + 1)
+        return ID_rec(Y, X.union(W), P, G, ordering, stop_on_hedge=stop_on_hedge, verbose=verbose, tab=tab + 1)
 
     # line 4
     C_components_V_X = get_C_components(G.induced_subgraph(G.vs.select(name_in=V.difference(X))))
@@ -78,16 +89,27 @@ def ID_rec(Y, X, P, G, ordering, verbose=False, tab=0):
             subcomponent_vertices = set(subcomponent.vs["name"])
             if verbose: print("Depth:", tab, "Line 4 Y:", subcomponent_vertices, "X:",
                               V.difference(subcomponent_vertices))
-            probabilities.add(
-                ID_rec(subcomponent_vertices, V.difference(subcomponent_vertices), P, G, ordering, verbose=verbose,
-                       tab=tab + 1))
+            # probabilities.add(
+            #     ID_rec(subcomponent_vertices, V.difference(subcomponent_vertices), P, G, ordering, verbose=verbose,
+            #            tab=tab + 1))
+            probabilities.add(ID_rec(subcomponent_vertices, V.difference(subcomponent_vertices), P, G, ordering,
+                                    stop_on_hedge=stop_on_hedge, verbose=verbose, tab=tab + 1))
         return Probability(recursive=True, children=probabilities, sumset=V.difference(Y.union(X)))
 
     # line 5
     C_components = get_C_components(G)
     if len(C_components) == 1:
-        if verbose: print("Depth:", tab, "Line 5")
-        raise HedgeFound(G, C_components_V_X[0])
+        # if verbose: 
+        #     print("Depth:", tab, "Line 5")
+        # raise HedgeFound(G, C_components_V_X[0])
+        if stop_on_hedge:
+            raise HedgeFound(G, C_components_V_X[0])
+        # The effect of X on Y is not identifiable in G: the hedge formed by G and the
+        # C-component of G[V\X] witnesses it. Return the unidentifiable clause P(y|do(x))
+        # so that the rest of the expression can still be identified.
+        if verbose: 
+            print("Depth:", tab, "Line 5 unidentifiable clause: P(", Y, "|do(", X, "))")
+        return Probability(var=Y, do=X, hedge=(printGraph(G), printGraph(C_components_V_X[0])))
 
     # line 6
     if check_subcomponent(C_components_V_X[0], C_components):
@@ -135,8 +157,10 @@ def ID_rec(Y, X, P, G, ordering, verbose=False, tab=0):
                                   P_out.printLatex())
                 if verbose: print("Depth:", tab, "Line 7 graph:", printGraph(G.induced_subgraph(G.vs.select(name_in=S_comp))))
 
+                # return ID_rec(Y, X.intersection(S_comp), P_out, G.induced_subgraph(G.vs.select(name_in=S_comp)),
+                #               ordering, verbose=verbose, tab=tab + 1)
                 return ID_rec(Y, X.intersection(S_comp), P_out, G.induced_subgraph(G.vs.select(name_in=S_comp)),
-                              ordering, verbose=verbose, tab=tab + 1)
+                              ordering, stop_on_hedge=stop_on_hedge, verbose=verbose, tab=tab + 1)
 
             if verbose: print("Depth:", tab, "Line 7 Probabilities has ", len(S_comp), " elements")
             probabilities = set()
@@ -153,12 +177,16 @@ def ID_rec(Y, X, P, G, ordering, verbose=False, tab=0):
 
                 probabilities.add(P_out)
             if verbose: print("Depth:", tab, "Line 7 graph:", printGraph(G.induced_subgraph(G.vs.select(name_in=S_comp))))
+            # return ID_rec(Y, X.intersection(S_comp), Probability(recursive=True, children=probabilities),
+            #               G.induced_subgraph(G.vs.select(name_in=S_comp)), ordering, verbose=verbose, tab=tab + 1)
             return ID_rec(Y, X.intersection(S_comp), Probability(recursive=True, children=probabilities),
-                          G.induced_subgraph(G.vs.select(name_in=S_comp)), ordering, verbose=verbose, tab=tab + 1)
+                          G.induced_subgraph(G.vs.select(name_in=S_comp)), ordering, stop_on_hedge=stop_on_hedge,
+                          verbose=verbose, tab=tab + 1)
     raise NoCaseTriggered()
 
 
-def IDC(Y, X, Z, P, G, ordering, verbose=False, tab=0):
+def IDC(Y, X, Z, P, G, ordering, stop_on_hedge=True, verbose=False, tab=0):
+
     '''Recursive conditional identification algorithm.'''
 
     # line 1
@@ -169,11 +197,11 @@ def IDC(Y, X, Z, P, G, ordering, verbose=False, tab=0):
         cond = Z.difference({node})
         if dSep(G_xz, Y, node, X.union(cond), verbose=verbose):
             if verbose: print("Depth:", tab, "Line 1 CONDITIONAL", "New X: ", X.union({node}))
-            return IDC(Y, X.union({node}), cond, P, G, ordering, verbose=verbose, tab=tab + 1)
+            return IDC(Y, X.union({node}), cond, P, G, ordering, stop_on_hedge=stop_on_hedge, verbose=verbose, tab=tab + 1)
 
     # line 2
     if verbose: print("Depth:", tab, "Line 2 CONDITIONAL, calling ID_rec with: Y: ", Y.union(Z), " X: ", X)
-    prob = ID_rec(Y.union(Z), X, P, G, ordering, verbose=verbose, tab=tab + 1)
+    prob = ID_rec(Y.union(Z), X, P, G, ordering, stop_on_hedge=stop_on_hedge, verbose=verbose, tab=tab + 1)
     prob_denom = prob.copy()
     prob_denom._sumset = prob_denom._sumset.union(Y)
     prob._fraction = True
@@ -182,7 +210,8 @@ def IDC(Y, X, Z, P, G, ordering, verbose=False, tab=0):
     return prob
 
 
-def ID(Y, X, G, cond=set(), verbose=False):
+# def ID(Y, X, G, cond=set(), verbose=False):
+def ID(Y, X, G, cond=set(), stop_on_hedge=True, verbose=False):
     '''Identification algorithm. If some conditional variables are inputted, then IDC is called.
     Otherwise, ID_rec is called.'''
     
@@ -192,6 +221,6 @@ def ID(Y, X, G, cond=set(), verbose=False):
     if not G_dir.is_dag():
         raise Exception('Entered graph is not a DAG.')
     if len(cond) == 0:
-        return ID_rec(Y, X, Probability(var=set(G.vs["name"])), G, get_topological_ordering(G), verbose=verbose)
+        return ID_rec(Y, X, Probability(var=set(G.vs["name"])), G, get_topological_ordering(G), stop_on_hedge=stop_on_hedge, verbose=verbose)
     else:
-        return IDC(Y, X, cond, Probability(var=set(G.vs["name"])), G, get_topological_ordering(G), verbose=verbose)
+        return IDC(Y, X, cond, Probability(var=set(G.vs["name"])), G, get_topological_ordering(G), stop_on_hedge=stop_on_hedge, verbose=verbose)
