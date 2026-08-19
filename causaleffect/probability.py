@@ -7,7 +7,7 @@ class Probability:
     and it becomes a product of probabilities in children. If fraction is set to True, the
     divisor is enabled.'''
 
-        def __init__(self, var=set(), cond=set(), recursive=False, children=set(), sumset=set(), fraction=False,
+    def __init__(self, var=set(), cond=set(), recursive=False, children=set(), sumset=set(), fraction=False,
                  divisor=None, do=set(), hedge=None):
         self._var = var
         self._cond = cond

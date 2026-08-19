@@ -26,7 +26,7 @@ class NoCaseTriggered(Exception):
         super().__init__(self._message)
 
 
-def ID_rec(Y, X, P, G, ordering, verbose=False, tab=0):
+def ID_rec(Y, X, P, G, ordering, stop_on_hedge=True, verbose=False, tab=0):
     '''Recursive non-conditional identification algorithm.
 
     If stop_on_hedge is True (default), a HedgeFound exception is raised as soon as a hedge
