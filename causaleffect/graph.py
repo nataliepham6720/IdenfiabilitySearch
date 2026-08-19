@@ -27,10 +27,13 @@ def get_directed_bidirected_graphs(g):
     '''Function that, given a graph, it decouples it and returns confounded graph
     and a graph with visible causations.'''
 
-    adj_bidir = np.asarray(g.get_adjacency().data) + np.asarray(g.get_adjacency().data).T
-    adj_bidir[adj_bidir < 2] = 0
-    adj_bidir[adj_bidir >= 2] = 1
-    adj_dir = np.asarray(g.get_adjacency().data) - adj_bidir
+    # adj_bidir = np.asarray(g.get_adjacency().data) + np.asarray(g.get_adjacency().data).T
+    # adj_bidir[adj_bidir < 2] = 0
+    # adj_bidir[adj_bidir >= 2] = 1
+    # adj_dir = np.asarray(g.get_adjacency().data) - adj_bidir
+    adj = np.asarray(g.get_adjacency().data)
+    adj_bidir = np.minimum(np.minimum(adj, adj.T), 1)
+    adj_dir = adj - adj_bidir
     g_dir = Graph.Adjacency(adj_dir.tolist())
     g_bidir = Graph.Adjacency(adj_bidir.tolist())
     g_dir.vs["name"] = g.vs["name"]
