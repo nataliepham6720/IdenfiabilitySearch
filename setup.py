@@ -34,7 +34,7 @@ setup(
     python_requires=">=3.7",
     keywords=['causaleffect', 'causality',
     'causation', 'identifiability', 'identification',
-    'graph'],
+    'graph', 'bounds', 'partial identification'],
     classifiers= [
         "Development Status :: 3 - Alpha",
         "Intended Audience :: Science/Research",

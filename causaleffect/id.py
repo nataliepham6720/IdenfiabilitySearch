@@ -108,8 +108,11 @@ def ID_rec(Y, X, P, G, ordering, stop_on_hedge=True, verbose=False, tab=0):
         # C-component of G[V\X] witnesses it. Return the unidentifiable clause P(y|do(x))
         # so that the rest of the expression can still be identified.
         if verbose: 
-            print("Depth:", tab, "Line 5 unidentifiable clause: P(", Y, "|do(", X, "))")
-        return Probability(var=Y, do=X, hedge=(printGraph(G), printGraph(C_components_V_X[0])))
+            #     print("Depth:", tab, "Line 5 unidentifiable clause: P(", Y, "|do(", X, "))")
+            # return Probability(var=Y, do=X, hedge=(printGraph(G), printGraph(C_components_V_X[0])))
+            print("Depth:", tab, "Line 5 observational factor:", P.printLatex())
+        return Probability(var=Y, do=X, hedge=(printGraph(G), printGraph(C_components_V_X[0])),
+                           q=P.copy())
 
     # line 6
     if check_subcomponent(C_components_V_X[0], C_components):

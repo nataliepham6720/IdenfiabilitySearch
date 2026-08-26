@@ -8,7 +8,7 @@ class Probability:
     divisor is enabled.'''
 
     def __init__(self, var=set(), cond=set(), recursive=False, children=set(), sumset=set(), fraction=False,
-                 divisor=None, do=set(), hedge=None):
+                 divisor=None, do=set(), hedge=None, q=None):
         self._var = var
         self._cond = cond
         self._recursive = recursive
@@ -18,9 +18,10 @@ class Probability:
         self._divisor = divisor
         # Interventional (unidentifiable) term: P_{do}(var|cond). When _do is not empty
         # this leaf stands for a causal effect that the ID algorithm could not identify,
-        # and _hedge holds the (C-forest 1, C-forest 2) witness of its unidentifiability.
+        # and _hedge holds the (C-forest 1, C-forest 2) of its unidentifiability.
         self._do = do
         self._hedge = hedge
+        self._q = q
 
     def copy(self):
         return copy.deepcopy(self)
@@ -34,6 +35,7 @@ class Probability:
         out["do"] = self._do
         out["hedge"] = self._hedge
         out["recursive"] = self._recursive
+        out["q"] = self._q.attributes() if self._q is not None else None
         if self._recursive:
             out["children"] = [child.attributes() for child in self._children]
         else:
@@ -175,7 +177,7 @@ class Probability:
     # Help functions for unidentifiable terms
     def isUnidentifiable(self):
         '''Function that returns True if the expression contains at least one
-        interventional (unidentifiable) term.'''
+        unidentifiable term.'''
         if len(self._do) != 0:
             return True
         if self._recursive:
@@ -186,6 +188,24 @@ class Probability:
             return self._divisor.isUnidentifiable()
         return False
 
+     def getUnidentifiableTerms(self):
+        '''Function that returns the list of unidentifiable terms P(y|do(x))
+        appearing in the expression.'''
+        terms = []
+        if len(self._do) != 0:
+            terms.append(self)
+        if self._recursive:
+            for prob in self._children:
+                terms = terms + prob.getUnidentifiableTerms()
+        if self._fraction and self._divisor is not None:
+            terms = terms + self._divisor.getUnidentifiableTerms()
+        return terms
+
+    def numUnidentifiableTerms(self):
+        '''Function that returns the number of unidentifiable terms P(y|do(x))
+        appearing in the expression.'''
+        return len(self.getUnidentifiableTerms())
+
     def getHedges(self):
         '''Function that returns the list of hedges witnessing the unidentifiable terms
         of the expression.'''
@@ -194,9 +214,9 @@ class Probability:
             hedges.append(self._hedge)
         if self._recursive:
             for prob in self._children:
-                hedges += prob.getHedges()
+                hedges = hedges + prob.getHedges()
         if self._fraction and self._divisor is not None:
-            hedges += self._divisor.getHedges()
+            hedges = hedges + self._divisor.getHedges()
         return hedges
 
     def decouple(self):

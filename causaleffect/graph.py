@@ -112,6 +112,20 @@ def get_ancestors(g, v_name):
     return set(ancestors)
 
 
+def get_parents(g, v_name):
+    """Returns a set containing all parents of a vertex, not
+    including itself"""
+
+    parents = []
+    if type(v_name) == type(set()):
+        for e in v_name:
+            parents = parents + get_parents(g, e)
+    else:
+        for index in g.neighbors(g.vs.find(name=v_name), mode="in"):
+            parents.append(g.vs[index]["name"])
+    return set(parents)
+
+
 def get_descendants(g, v_name):
     '''Function that returns a set containing all descendants of a vertex,
     including itself'''
@@ -121,7 +135,7 @@ def get_descendants(g, v_name):
     descendants = []
     if type(v_name) == type(set()):
         for e in v_name:
-            descendants += get_descendants(g, e)
+            descendants = descendants + get_descendants(g, e)
     else:
         descendants = [v_name]
         children = [v_name]
