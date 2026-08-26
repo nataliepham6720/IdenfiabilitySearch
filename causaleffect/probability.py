@@ -188,7 +188,7 @@ class Probability:
             return self._divisor.isUnidentifiable()
         return False
 
-     def getUnidentifiableTerms(self):
+    def getUnidentifiableTerms(self):
         '''Function that returns the list of unidentifiable terms P(y|do(x))
         appearing in the expression.'''
         terms = []
