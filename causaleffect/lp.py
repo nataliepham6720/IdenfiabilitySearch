@@ -74,9 +74,7 @@ def check_at_most_one_unidentifiable(P, raise_error=True):
 _STYLES = {
     # Self-contained LaTeX, it needs no macro definitions.
     'mathbf': {'q': '\\mathbf{q}', 'response': lambda name: '\\mathbf{' + name.lower() + '}'},
-    # Notation of the dissertation, it needs \vqb and \vb<name> to be defined. Names that are
-    # not a single word are braced, so that indexing them does not give a double subscript.
-    'macro': {'q': '\\vqb', 'response': lambda name: '\\vb' + name.lower() if name.isalpha()
+    'macro': {'q': '\\vec{q}', 'response': lambda name: '\\vb' + name.lower() if name.isalpha()
               else '{\\vb' + name.lower() + '}'},
 }
 
@@ -226,11 +224,6 @@ class CanonicalProgram:
         self._component = _sort([variable for variable, cond in factors], factors, ordering)
         self._factors = [(variable, cond) for variable in self._component
                          for name, cond in factors if name == variable]
-        # A response function only takes the parents of its variable as arguments. When the graph
-        # is not given, or when a parent has already been marginalized out of the c-factor, the
-        # whole conditioning set of the c-factor is taken instead: the response functions are then
-        # allowed to depend on non-parents as well, which relaxes the program and widens its
-        # bounds, but keeps them valid.
         G_dir = get_directed_bidirected_graphs(G)[0] if G is not None else None
         self._args = {}
         for variable, cond in factors:
@@ -374,15 +367,15 @@ class CanonicalProgram:
         '''Function that returns the whole bounding program, in LaTeX syntax.'''
 
         q = _style(style)['q']
-        out = '\\begin{equation}'
-        if label is not None:
-            out += '\\label{' + label + '}'
-        out += '\n\\begin{aligned}\n'
-        out += ('\\min_{' + q + '} / \\max_{' + q + '}  &' + self.objectiveLatex(style) + '\\\\\n')
-        out += '\\text{s.t.}\\quad\n  ' + self.constraintsLatex(style) + '\n'
-        out += '\\end{aligned}\n\\end{equation}\n'
-        out += 'where $' + self.dataLatex(style) + '$\n'
-        out += 'and $' + self.coefficientLatex(style) + '$'
+        # out = '\\begin{equation}'
+        # if label is not None:
+        #     out += '\\label{' + label + '}'
+        # out += '\n\\begin{aligned}\n'
+        # out += ('\\min_{' + q + '} / \\max_{' + q + '}  &' + self.objectiveLatex(style) + '\\\\\n')
+        # out += '\\text{s.t.}\\quad\n  ' + self.constraintsLatex(style) + '\n'
+        # out += '\\end{aligned}\n\\end{equation}\n'
+        out = '$' + self.dataLatex(style) + '$\n'
+        out += '$' + self.coefficientLatex(style) + '$'
         return out
 
     def __str__(self):
