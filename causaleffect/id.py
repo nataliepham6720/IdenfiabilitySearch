@@ -26,7 +26,22 @@ class NoCaseTriggered(Exception):
         super().__init__(self._message)
 
 
-def ID_rec(Y, X, P, G, ordering, stop_on_hedge=True, verbose=False, tab=0):
+def get_context(P, V):
+    '''Returns the variables the observational factor P conditions on that lie outside the current
+    c-component containing V.'''
+
+    cond = set()
+    nodes = [P]
+    while len(nodes) != 0:
+        node = nodes.pop()
+        cond = cond.union(node._cond)
+        if node._recursive:
+            nodes.extend(node._children)
+        if node._fraction and node._divisor is not None:
+            nodes.append(node._divisor)
+    return cond.difference(V)
+
+def ID_rec(Y, X, P, G, ordering, stop_on_hedge=True, dropped=None, verbose=False, tab=0):
     '''Recursive non-conditional identification algorithm.
 
     If stop_on_hedge is True (default), a HedgeFound exception is raised as soon as a hedge
@@ -35,6 +50,8 @@ def ID_rec(Y, X, P, G, ordering, stop_on_hedge=True, verbose=False, tab=0):
     with the remaining subproblems, so the returned expression is identified everywhere
     except in the interventional terms it contains.'''
 
+    if dropped is None:
+        dropped = set()
     V = set(G.vs["name"])
     G_dir, G_bidir = get_directed_bidirected_graphs(G)
     # line 1
@@ -64,7 +81,11 @@ def ID_rec(Y, X, P, G, ordering, stop_on_hedge=True, verbose=False, tab=0):
         # return ID_rec(Y, X.intersection(anc), P_out, G.induced_subgraph(G.vs.select(name_in=anc)), ordering,
         #               verbose=verbose, tab=tab + 1)
         return ID_rec(Y, X.intersection(anc), P_out, G.induced_subgraph(G.vs.select(name_in=anc)), ordering,
-                      stop_on_hedge=stop_on_hedge, verbose=verbose, tab=tab + 1)
+                      stop_on_hedge=stop_on_hedge, dropped=dropped.union(X.difference(anc)),
+                      verbose=verbose, tab=tab + 1)
+        # G.induced_subgraph(G.vs.select(name_in=anc)), ordering,
+                    #   stop_on_hedge=stop_on_hedge, verbose=verbose, tab=tab + 1)
+        
 
     # line 3
     G_x = G.copy()
@@ -76,7 +97,7 @@ def ID_rec(Y, X, P, G, ordering, stop_on_hedge=True, verbose=False, tab=0):
         if verbose: print("Depth:", tab, "Line 3 before: Y:", Y, "X:", X, "V:", V, "P:", P.printLatex())
         if verbose: print("Depth:", tab, "Line 3 W:", W, "new X:", X.union(W))
         # return ID_rec(Y, X.union(W), P, G, ordering, verbose=verbose, tab=tab + 1)
-        return ID_rec(Y, X.union(W), P, G, ordering, stop_on_hedge=stop_on_hedge, verbose=verbose, tab=tab + 1)
+        return ID_rec(Y, X.union(W), P, G, ordering, stop_on_hedge=stop_on_hedge, dropped=dropped, verbose=verbose, tab=tab + 1)
 
     # line 4
     C_components_V_X = get_C_components(G.induced_subgraph(G.vs.select(name_in=V.difference(X))))
@@ -93,8 +114,10 @@ def ID_rec(Y, X, P, G, ordering, stop_on_hedge=True, verbose=False, tab=0):
             #     ID_rec(subcomponent_vertices, V.difference(subcomponent_vertices), P, G, ordering, verbose=verbose,
             #            tab=tab + 1))
             probabilities.add(ID_rec(subcomponent_vertices, V.difference(subcomponent_vertices), P, G, ordering,
-                                    stop_on_hedge=stop_on_hedge, verbose=verbose, tab=tab + 1))
-        return Probability(recursive=True, children=probabilities, sumset=V.difference(Y.union(X)))
+                                    stop_on_hedge=stop_on_hedge, dropped=dropped, verbose=verbose, tab=tab + 1))
+        # return Probability(recursive=True, children=probabilities, sumset=V.difference(Y.union(X)))
+        return Probability(var=Y, cond=get_context(P, V), do=X,
+                           hedge=(printGraph(G), printGraph(C_components_V_X[0])), q=P.copy())
 
     # line 5
     C_components = get_C_components(G)
@@ -111,7 +134,7 @@ def ID_rec(Y, X, P, G, ordering, stop_on_hedge=True, verbose=False, tab=0):
             #     print("Depth:", tab, "Line 5 unidentifiable clause: P(", Y, "|do(", X, "))")
             # return Probability(var=Y, do=X, hedge=(printGraph(G), printGraph(C_components_V_X[0])))
             print("Depth:", tab, "Line 5 observational factor:", P.printLatex())
-        return Probability(var=Y, do=X, hedge=(printGraph(G), printGraph(C_components_V_X[0])),
+        return Probability(var=Y, cond=get_context(P, V), do=X.union(dropped), hedge=(printGraph(G), printGraph(C_components_V_X[0])),
                            q=P.copy())
 
     # line 6
@@ -163,7 +186,7 @@ def ID_rec(Y, X, P, G, ordering, stop_on_hedge=True, verbose=False, tab=0):
                 # return ID_rec(Y, X.intersection(S_comp), P_out, G.induced_subgraph(G.vs.select(name_in=S_comp)),
                 #               ordering, verbose=verbose, tab=tab + 1)
                 return ID_rec(Y, X.intersection(S_comp), P_out, G.induced_subgraph(G.vs.select(name_in=S_comp)),
-                              ordering, stop_on_hedge=stop_on_hedge, verbose=verbose, tab=tab + 1)
+                              ordering, stop_on_hedge=stop_on_hedge, dropped=dropped.union(X.difference(S_comp)), verbose=verbose, tab=tab + 1)
 
             if verbose: print("Depth:", tab, "Line 7 Probabilities has ", len(S_comp), " elements")
             probabilities = set()
@@ -184,7 +207,7 @@ def ID_rec(Y, X, P, G, ordering, stop_on_hedge=True, verbose=False, tab=0):
             #               G.induced_subgraph(G.vs.select(name_in=S_comp)), ordering, verbose=verbose, tab=tab + 1)
             return ID_rec(Y, X.intersection(S_comp), Probability(recursive=True, children=probabilities),
                           G.induced_subgraph(G.vs.select(name_in=S_comp)), ordering, stop_on_hedge=stop_on_hedge,
-                          verbose=verbose, tab=tab + 1)
+                          dropped=dropped.union(X.difference(S_comp)), verbose=verbose, tab=tab + 1)
     raise NoCaseTriggered()
 
 
