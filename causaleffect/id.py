@@ -115,9 +115,9 @@ def ID_rec(Y, X, P, G, ordering, stop_on_hedge=True, dropped=None, verbose=False
             #            tab=tab + 1))
             probabilities.add(ID_rec(subcomponent_vertices, V.difference(subcomponent_vertices), P, G, ordering,
                                     stop_on_hedge=stop_on_hedge, dropped=dropped, verbose=verbose, tab=tab + 1))
-        # return Probability(recursive=True, children=probabilities, sumset=V.difference(Y.union(X)))
-        return Probability(var=Y, cond=get_context(P, V), do=X,
-                           hedge=(printGraph(G), printGraph(C_components_V_X[0])), q=P.copy())
+        return Probability(recursive=True, children=probabilities, sumset=V.difference(Y.union(X)))
+        # return Probability(var=Y, cond=get_context(P, V), do=X,
+        #                    hedge=(printGraph(G), printGraph(C_components_V_X[0])), q=P.copy())
 
     # line 5
     C_components = get_C_components(G)
