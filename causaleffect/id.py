@@ -134,7 +134,7 @@ def ID_rec(Y, X, P, G, ordering, stop_on_hedge=True, dropped=None, verbose=False
             #     print("Depth:", tab, "Line 5 unidentifiable clause: P(", Y, "|do(", X, "))")
             # return Probability(var=Y, do=X, hedge=(printGraph(G), printGraph(C_components_V_X[0])))
             print("Depth:", tab, "Line 5 observational factor:", P.printLatex())
-        return Probability(var=Y, cond=get_context(P, V), do=X.union(dropped), hedge=(printGraph(G), printGraph(C_components_V_X[0])),
+        return Probability(var=Y, cond=get_context(P, V), do=X.union(), hedge=(printGraph(G), printGraph(C_components_V_X[0])),
                            q=P.copy())
 
     # line 6
